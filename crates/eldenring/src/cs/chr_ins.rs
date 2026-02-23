@@ -450,6 +450,7 @@ bitfield! {
     #[derive(Clone, Copy, PartialEq, Eq, Hash)]
     pub struct NetChrSyncFlags(u8);
     impl Debug;
+    pub unk2, set_unk2: 2;
     /// Set for main player character.
     pub replay_recorder_enabled, set_replay_recorder_enabled: 3;
     /// When set, the character will use distance-based network update authority.

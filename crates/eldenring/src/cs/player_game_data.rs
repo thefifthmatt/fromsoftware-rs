@@ -54,7 +54,7 @@ pub struct PlayerGameData {
     pub madness_resist: u32,
     pub pending_block_clear_bonus: f32,
     pub chr_type: ChrType,
-    character_name: [u16; 17],
+    pub character_name: [u16; 17],
     pub gender: u8,
     pub archetype: u8,
     pub vow_type: u8,
@@ -340,12 +340,16 @@ pub struct ChrAsmEquipEntries {
     pub covenant: OptionalItemId,
     pub quick_tems: [OptionalItemId; 10],
     pub pouch: [OptionalItemId; 6],
+    unk: u32,
+    pub physick_tears: [OptionalItemId; 2],
+    // Cannot be edited in-game but it does apply when drinking the physick flask
+    pub extra_physick_tear: OptionalItemId,
 }
 
 #[repr(C)]
 pub struct EquipGameData {
     vftable: usize,
-    unk8: [u32; 22],
+    pub equipped_indices: [i32; 22],
     unk60: usize,
     unk68: u32,
     pub chr_asm: ChrAsm,
@@ -357,8 +361,6 @@ pub struct EquipGameData {
     pub item_replenish_state_tracker: Option<OwnedPtr<ItemReplenishStateTracker>>,
     pub qm_item_backup_vector: OwnedPtr<Vector<QMItemBackupVectorItem>>,
     pub equipment_entries: ChrAsmEquipEntries,
-    unk3e0: usize,
-    unk3e8: usize,
     pub player_game_data: NonNull<PlayerGameData>,
     /// Whether this equipment data belongs to the main (local) player.
     pub is_main_player: bool,

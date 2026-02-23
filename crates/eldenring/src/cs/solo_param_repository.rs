@@ -331,6 +331,7 @@ impl SoloParamRepository {
         unsafe {
             self.get_param_file::<P>()
                 .get_row_by_index::<P::UnderlyingType>(row_index)
+                .map(|pair| pair.1)
         }
     }
 
@@ -349,6 +350,7 @@ impl SoloParamRepository {
         unsafe {
             self.get_param_file_mut::<P>()
                 .get_row_by_index_mut::<P::UnderlyingType>(row_index)
+                .map(|pair| pair.1)
         }
     }
 

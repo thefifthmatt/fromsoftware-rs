@@ -1,6 +1,7 @@
 use std::{fmt::Formatter, mem::transmute, ptr::NonNull};
 
 use pelite::pe64::Pe;
+use shared::F32Vector3;
 use windows::core::PCWSTR;
 
 use super::{BlockId, FieldInsHandle, WorldInfoOwner};
@@ -272,7 +273,7 @@ pub struct CSMsbParts {
     pub draw_flags: u32,
     _padc: u32,
     unk10: usize,
-    pub msb_part: OwnedPtr<MsbPart>,
+    pub msb_part: Option<NonNull<MsbPart>>,
     unk20: [u8; 0x30],
 }
 
@@ -283,11 +284,46 @@ pub struct CSMsbPartsEne {
     pub cs_msb_parts: CSMsbParts,
 }
 
+// https://github.com/JKAnderson/SoulsTemplates/blob/master/MSB/MSBE/Part.bt
 #[repr(C)]
 pub struct MsbPart {
     pub name: PCWSTR,
-    // TODO: rest
+    instance_id: i32,
+    part_type: i32,
+    part_type_index: i32,
+    model_index: i32,
+    sib_path: PCWSTR,
+    position: F32Vector3,
+    rotation: F32Vector3,
+    scale: F32Vector3,
+    unk44: i32,
+    pub map_studio_layer: u32,
+    unk4c: i32,
+    display_data: usize,
+    display_group_data: usize,
+    pub common: NonNull<MsbPartCommon>,
+    type_data: usize,
+    gparam_data: usize,
+    scene_gparam_data: usize,
+    grass_data: usize,
+    unk88: usize,
+    unk90: usize,
+    unka0: usize,
+    unka8: usize,
+    unkb0: usize,
+    unkb8: usize,
 }
+
+#[repr(C)]
+pub struct MsbPartCommon {
+    pub entity_id: u32,
+    // Various unnamed fields until 1C
+    unk4: [u8; 0x18],
+    pub entity_group_ids: [u32; 8],
+    unk3c: i16,
+    unk3e: i16,
+}
+
 
 #[repr(C)]
 /// Used by the game to seperate geometry spawning code (like MSB parser) from the actual GeomIns

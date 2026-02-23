@@ -158,6 +158,20 @@ impl FD4ParamResCap {
     pub unsafe fn get_mut<P: ParamDef>(&mut self, id: u32) -> Option<&mut P> {
         unsafe { self.data.get_row_by_id_mut(id) }
     }
+
+    /// # Safety
+    ///
+    /// Type `P` must match the actual row data structure for this param file.
+    pub unsafe fn get_index<P: ParamDef>(&self, index: usize) -> Option<(u32, &P)> {
+        unsafe { self.data.get_row_by_index(index) }
+    }
+
+    /// # Safety
+    ///
+    /// Type `P` must match the actual row data structure for this param file.
+    pub unsafe fn get_index_mut<P: ParamDef>(&mut self, index: usize) -> Option<(u32, &mut P)> {
+        unsafe { self.data.get_row_by_index_mut(index) }
+    }
 }
 
 /// Runtime metadata prepended at offset -0x10 from the param file.
@@ -279,17 +293,19 @@ impl ParamFile {
     /// # Safety
     ///
     /// Type `P` must match the actual row data structure for this param file.
-    pub unsafe fn get_row_by_index<P: ParamDef>(&self, row_index: usize) -> Option<&P> {
+    pub unsafe fn get_row_by_index<P: ParamDef>(&self, row_index: usize) -> Option<(u32, &P)> {
+        let row_id = self.row_id(row_index)?;
         let data_offset = self.row_data_offset(row_index)?;
-        Some(unsafe { &*(self.as_ptr().add(data_offset) as *const P) })
+        Some((row_id, unsafe { &*(self.as_ptr().add(data_offset) as *const P) }))
     }
 
     /// # Safety
     ///
     /// Type `P` must match the actual row data structure for this param file.
-    pub unsafe fn get_row_by_index_mut<P: ParamDef>(&mut self, row_index: usize) -> Option<&mut P> {
+    pub unsafe fn get_row_by_index_mut<P: ParamDef>(&mut self, row_index: usize) -> Option<(u32, &mut P)> {
+        let row_id = self.row_id(row_index)?;
         let data_offset = self.row_data_offset(row_index)?;
-        Some(unsafe { &mut *(self.as_ptr().add(data_offset) as *mut P) })
+        Some((row_id, unsafe { &mut *(self.as_ptr().add(data_offset) as *mut P) }))
     }
 
     pub const fn metadata(&self) -> &ParamHeaderMetadata {
@@ -352,6 +368,29 @@ impl ParamFile {
                     .add(base + row_index * size_of::<RowDescriptor<ParamLayout32>>())
                     as *const RowDescriptor<ParamLayout32>);
                 Some(desc.data_offset())
+            }
+        }
+    }
+
+    fn row_id(&self, row_index: usize) -> Option<u32> {
+        if row_index >= self.row_count() {
+            return None;
+        }
+        let base = self.row_descriptors_offset();
+
+        unsafe {
+            if self.header.is_64_bit() {
+                let desc = &*(self
+                    .as_ptr()
+                    .add(base + row_index * size_of::<RowDescriptor<ParamLayout64>>())
+                    as *const RowDescriptor<ParamLayout64>);
+                Some(desc.id)
+            } else {
+                let desc = &*(self
+                    .as_ptr()
+                    .add(base + row_index * size_of::<RowDescriptor<ParamLayout32>>())
+                    as *const RowDescriptor<ParamLayout32>);
+                Some(desc.id)
             }
         }
     }

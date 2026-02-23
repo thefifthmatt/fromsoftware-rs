@@ -36,6 +36,8 @@ impl DebugDisplay for CSWorldGeomManBlockData {
                         .msb_parts_geom
                         .msb_parts
                         .msb_part
+                        .unwrap()
+                        .as_ref()
                         .name
                         .to_string()
                 }
@@ -64,6 +66,8 @@ impl DebugDisplay for CSWorldGeomManBlockData {
                         .msb_parts_geom
                         .msb_parts
                         .msb_part
+                        .unwrap()
+                        .as_ref()
                         .name
                         .to_string()
                 }

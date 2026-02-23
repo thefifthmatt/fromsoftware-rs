@@ -137,10 +137,12 @@ bitfield! {
     #[derive(Clone, Copy, PartialEq, Eq, Hash)]
     pub struct ChrMenuFlags(u32);
     impl Debug;
+    pub lock_equip_0, set_lock_equip_0: 0;
     /// Set by TAE Event 0 (action 54 DISABLE_START_INPUTS)
     /// Controls whether the player can open the pause menu
     /// (Equipment, Crafting, Status, Messages, System, Multiplayer, Pouch, Gestures)
     pub pause_menu_state, set_pause_menu_state: 3;
+    pub lock_equip_4, set_lock_equip_4: 4;
 }
 
 #[repr(C)]
