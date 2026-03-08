@@ -182,6 +182,7 @@ pub struct PlayerGameData {
     unka68: [u8; 0x4],
     pub poise: f32,
     pub discovery: u32,
+    pub effective_unlocked_magic_slots: u32,
     menu_ref_special_effect_1: usize,
     menu_ref_special_effect_2: usize,
     menu_ref_special_effect_3: usize,
