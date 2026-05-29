@@ -2,9 +2,11 @@ use std::{mem::MaybeUninit, ptr::NonNull, slice};
 
 use bitfield::bitfield;
 
-use shared::UnknownStruct;
+use shared::*;
 
 #[repr(C)]
+#[derive(Superclass)]
+#[superclass(children(WorldRes))]
 /// Source of name: RTTI
 pub struct WorldInfo {
     _vftable: usize,
@@ -35,7 +37,8 @@ pub struct WorldInfo {
     /// Use [Self::block_info] to access this safely.
     pub world_block_info_list_ptr: NonNull<WorldBlockInfo>,
 
-    _unk28: u8,
+    /// This name comes from debug data, but the behavior isn't yet well-understood.
+    pub is_lock: bool,
 
     /// The pool of [WorldAreaInfo]s. Only the first
     /// [world_area_info_len](Self::world_area_info_len) are initialized.
@@ -92,13 +95,42 @@ impl WorldInfo {
             )
         }
     }
+
+    /// The currently initialized area infos and their corresponding block
+    /// infos.
+    pub fn area_and_block_info(&self) -> impl Iterator<Item = (&WorldAreaInfo, &[WorldBlockInfo])> {
+        self.area_info().iter().map(|area| {
+            // Safety: We know there isn't a mutable reference to the block
+            // info because it's owned by this WorldInfo to which we have an
+            // immutable reference.
+            (area, unsafe {
+                slice::from_raw_parts(area.block_info.as_ptr(), area.block_info_length as usize)
+            })
+        })
+    }
+
+    /// The mutable currently initialized area infos and their corresponding
+    /// block infos.
+    pub fn area_and_block_info_mut(
+        &mut self,
+    ) -> impl Iterator<Item = (&mut WorldAreaInfo, &mut [WorldBlockInfo])> {
+        self.area_info_mut().iter_mut().map(|area| {
+            // Safety: We know there aren't any other references to the block
+            // info because it's owned by this WorldInfo to which we have a
+            // mutable reference.
+            let blocks = unsafe {
+                slice::from_raw_parts_mut(area.block_info.as_mut(), area.block_info_length as usize)
+            };
+            (area, blocks)
+        })
+    }
 }
 
 #[repr(C)]
 /// Source of name: RTTI
 pub struct WorldAreaInfo {
     _vftable: usize,
-    _pad08: [u8; 3],
+    _unk08: [u8; 3],
 
     /// The area's numeric identifier.
     ///
@@ -108,8 +140,11 @@ pub struct WorldAreaInfo {
     /// The [WorldInfo] instance that owns this area.
     pub owner: NonNull<WorldInfo>,
 
-    _unk18: u32,
-    _unk1c: u32,
+    /// The index of this area in [WorldInfo::world_area_info].
+    pub world_area_index: u32,
+
+    /// The index of this area's first block in [WorldInfo::world_block_info].
+    pub world_block_index: u32,
 
     /// The length of the [block_info](Self::block_info) array.
     pub block_info_length: u32,
@@ -117,21 +152,8 @@ pub struct WorldAreaInfo {
     /// The block infos for this [WorldAreaInfo].
     pub block_info: NonNull<WorldBlockInfo>,
 
-    _unk30: u8,
-}
-
-impl WorldAreaInfo {
-    /// The block infos for this [WorldAreaInfo].
-    pub fn block_info(&self) -> &[WorldBlockInfo] {
-        unsafe { slice::from_raw_parts(self.block_info.as_ptr(), self.block_info_length as usize) }
-    }
-
-    /// The mutable block infos for this [WorldAreaInfo].
-    pub fn block_info_mut(&mut self) -> &mut [WorldBlockInfo] {
-        unsafe {
-            slice::from_raw_parts_mut(self.block_info.as_mut(), self.block_info_length as usize)
-        }
-    }
+    /// This name comes from debug data, but the behavior isn't yet well-understood.
+    pub is_lock: bool,
 }
 
 bitfield! {
@@ -159,7 +181,7 @@ pub struct WorldBlockInfo {
     pub owner: NonNull<WorldInfo>,
 
     /// The [WorldAreaInfo] that contains this block.
-    pub world_area_info: Option<NonNull<WorldAreaInfo>>,
+    pub world_area_info: NonNull<WorldAreaInfo>,
 
     /// The index of this in [WorldInfo.world_block_info].
     ///
@@ -182,9 +204,10 @@ pub struct WorldBlockInfo {
 }
 
 #[repr(C)]
+#[derive(Subclass)]
 /// Source of name: RTTI
-pub struct WorldInfoOwner {
-    pub super_world_info: WorldInfo,
+pub struct WorldRes {
+    pub world_info: WorldInfo,
     _unk8: u64,
 
     /// The number of defined entries in [world_area_res](Self::world_area_res).
@@ -269,8 +292,8 @@ impl WorldRes {
     }
 }
 
-// WorldRes doesn't add any additional fields.
-pub type WorldRes = WorldInfoOwner;
+// WorldInfoOwner doesn't add any additional fields.
+pub type WorldInfoOwner = WorldRes;
 
 // Source of name: RTTI
 pub type WorldAreaRes = UnknownStruct<0x108>;
@@ -287,6 +310,6 @@ mod test {
         assert_eq!(0x38, size_of::<WorldAreaInfo>());
         assert_eq!(0x70, size_of::<WorldBlockInfo>());
         assert_eq!(0x1298, size_of::<WorldInfo>());
-        assert_eq!(0xae90, size_of::<WorldInfoOwner>());
+        assert_eq!(0xae90, size_of::<WorldRes>());
     }
 }

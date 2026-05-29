@@ -3,7 +3,7 @@ use std::{borrow::Cow, fmt, ops, ptr, sync::LazyLock};
 
 use pelite::pe64::Pe;
 
-use shared::{FromStatic, InstanceError, InstanceResult, Program, util::IncompleteArrayField};
+use shared::{FromStatic, InstanceResult, Program, util::IncompleteArrayField};
 
 use super::ItemId;
 use crate::rva;
@@ -19,12 +19,8 @@ impl FromStatic for MapItemMan {
     }
 
     /// Returns the singleton instance of `MapItemMan`.
-    unsafe fn instance() -> InstanceResult<&'static mut Self> {
-        let target = Program::current()
-            .rva_to_va(rva::get().map_item_man_ptr)
-            .map_err(|_| InstanceError::NotFound)? as *const *mut Self;
-
-        unsafe { (*target).as_mut() }.ok_or(InstanceError::Null)
+    fn instance_ptr() -> InstanceResult<*mut Self> {
+        unsafe { shared::load_static_indirect(rva::get().map_item_man_ptr) }
     }
 }
 
@@ -45,14 +41,14 @@ pub static MAP_ITEM_MAN_GRANT_ITEM_VA: LazyLock<u64> = LazyLock::new(|| {
 impl MapItemMan {
     /// Grants the player the single `item`, with an on-screen pop-up indicating
     /// that they received it.
-    pub fn grant_item(&self, item: impl Into<ItemBufferEntry>) {
+    pub fn grant_item(&mut self, item: impl Into<ItemBufferEntry>) {
         let array = ItemArray::new([item.into()]);
         self.grant_items(&array);
     }
 
     /// Grants the player the given `items`, with an on-screen pop-up indicating
     /// that they received them.
-    pub fn grant_items(&self, items: impl AsRef<ItemBuffer>) {
+    pub fn grant_items(&mut self, items: impl AsRef<ItemBuffer>) {
         let grant_items: extern "C" fn(&MapItemMan, &ItemBuffer, &i32) =
             unsafe { std::mem::transmute(*MAP_ITEM_MAN_GRANT_ITEM_VA) };
 

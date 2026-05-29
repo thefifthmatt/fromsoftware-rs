@@ -180,7 +180,7 @@ impl FromStatic for MenuMan {
         "MenuMan".into()
     }
 
-    unsafe fn instance() -> fromsoftware_shared::InstanceResult<&'static mut Self> {
+    fn instance_ptr() -> fromsoftware_shared::InstanceResult<*mut Self> {
         unsafe { shared::load_static_indirect(rva::get().sprj_menu_man_ptr) }
     }
 }
@@ -213,7 +213,7 @@ impl GrantItemCommand {
 
     /// Returns item ID granted by [GrantItemCommand].
     pub fn item_id(&self) -> ItemId {
-        unsafe { mem::transmute::<u32, ItemId>(self.category as u32 & self.item_id) }
+        unsafe { mem::transmute::<u32, ItemId>(self.category as u32 | self.item_id) }
     }
 }
 

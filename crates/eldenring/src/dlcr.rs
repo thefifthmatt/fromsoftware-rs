@@ -1,10 +1,10 @@
 use std::{borrow::Cow, ptr::NonNull};
 
-use shared::{FromStatic, OwnedPtr, Program};
+use shared::{FromStatic, OwnedPtr};
 
 use vtable_rs::VPtr;
 
-use crate::{Vector, dlkr::DLAllocatorBase};
+use crate::{DLVector, dlkr::DLAllocator, rva};
 
 #[vtable_rs::vtable]
 pub trait DLCipherKeyVmt {
@@ -205,7 +205,7 @@ pub struct OpenSslAesCipher {
     /// Key usage type: Default=1
     /// See [KeyUsageType] enum
     pub key_usage: u32,
-    pub allocator: NonNull<DLAllocatorBase>,
+    pub allocator: &'static DLAllocator,
     evp_cipher: usize,
     evp_cipher_ctx: usize,
     pub requires_iv: bool,
@@ -226,7 +226,7 @@ pub struct OpenSslRsaCipher {
     pub padding_mode: u32,
     /// Block size in bytes
     pub block_size: u32,
-    pub allocator: NonNull<DLAllocatorBase>,
+    pub allocator: &'static DLAllocator,
     /// Whether the key is public or private
     pub use_public_key: bool,
     bio: usize,
@@ -252,13 +252,13 @@ pub trait DLCipherSPIVmt {
         &self,
         params: &CipherInitParams,
         key: &DLCipherKey,
-        allocator: &DLAllocatorBase,
+        allocator: &DLAllocator,
     ) -> Option<NonNull<DLDecrypter>>;
     fn get_encrypter(
         &self,
         params: &CipherInitParams,
         key: &DLCipherKey,
-        allocator: &DLAllocatorBase,
+        allocator: &DLAllocator,
     ) -> usize;
 }
 
@@ -275,7 +275,7 @@ pub trait DLKeyGeneratorSPIVmt {
         params: &CryptoKeyParams,
         key: &str,
         key_len: u32,
-        allocator: &DLAllocatorBase,
+        allocator: &DLAllocator,
     ) -> Option<NonNull<DLCipherKey>>;
 }
 
@@ -286,8 +286,8 @@ pub struct DLKeyGeneratorSPI {
 
 #[repr(C)]
 pub struct CryptoSPIRegistry {
-    pub key_generators: Vector<NonNull<DLKeyGeneratorSPI>>,
-    pub cipher_spis: Vector<NonNull<DLCipherSPI>>,
+    pub key_generators: DLVector<NonNull<DLKeyGeneratorSPI>>,
+    pub cipher_spis: DLVector<NonNull<DLCipherSPI>>,
 }
 
 impl CryptoSPIRegistry {
@@ -295,12 +295,12 @@ impl CryptoSPIRegistry {
         &self,
         params: &CipherInitParams,
         key: &DLCipherKey,
-        allocator: &DLAllocatorBase,
+        allocator: &DLAllocator,
     ) -> Option<NonNull<DLDecrypter>> {
         if !params.is_valid() {
             return None;
         }
-        for spi_ptr in self.cipher_spis.items().iter() {
+        for spi_ptr in self.cipher_spis.iter() {
             let cipher_spi = unsafe { spi_ptr.as_ref() };
             if let Some(decrypter) =
                 (cipher_spi.vftable.get_decrypter)(cipher_spi, params, key, allocator)
@@ -315,7 +315,7 @@ impl CryptoSPIRegistry {
         &self,
         params: &CryptoKeyParams,
         rsa_key: &str,
-        allocator: &DLAllocatorBase,
+        allocator: &DLAllocator,
     ) -> Option<NonNull<DLCipherKey>> {
         if !params.is_valid() {
             return None;
@@ -323,7 +323,7 @@ impl CryptoSPIRegistry {
 
         let rsa_key_len: u32 = rsa_key.len() as u32;
 
-        for spi_ptr in self.key_generators.items().iter() {
+        for spi_ptr in self.key_generators.iter() {
             let keygen_spi = unsafe { spi_ptr.as_ref() };
             if let Some(cipher_key) = (keygen_spi.vftable.get_cipher_key)(
                 keygen_spi,
@@ -345,21 +345,7 @@ impl FromStatic for CryptoSPIRegistry {
         Cow::Borrowed("CryptoSPIRegistry")
     }
 
-    unsafe fn instance() -> fromsoftware_shared::InstanceResult<&'static mut Self> {
-        use crate::rva;
-        use pelite::pe64::Pe;
-
-        let target = Program::current()
-            .rva_to_va(rva::get().crypto_spi_registry)
-            .map_err(|_| fromsoftware_shared::InstanceError::NotFound)?
-            as *mut Option<NonNull<CryptoSPIRegistry>>;
-
-        unsafe {
-            target
-                .as_mut()
-                .and_then(|opt| opt.as_mut())
-                .map(|nn| nn.as_mut())
-                .ok_or(fromsoftware_shared::InstanceError::Null)
-        }
+    fn instance_ptr() -> fromsoftware_shared::InstanceResult<*mut Self> {
+        unsafe { shared::load_static_indirect(rva::get().crypto_spi_registry) }
     }
 }

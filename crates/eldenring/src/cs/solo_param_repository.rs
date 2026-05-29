@@ -1,13 +1,13 @@
 use shared::{OwnedPtr, Subclass};
 
 use crate::{
-    ArrayWithHeader, Vector,
-    cs::BlockId,
-    dlkr::DLAllocatorRef,
+    ArrayWithHeader, DLMap, DLMultiMap, DLVector,
+    cs::{BlockId, ItemCategory, ItemId},
+    dlkr::DLAllocator,
     fd4::{FD4ParamResCap, FD4ResCap, FD4ResRep, ParamFile},
     param::ParamDef,
-    stl::Tree,
 };
+
 use bitfield::bitfield;
 
 #[repr(C)]
@@ -29,7 +29,7 @@ pub struct WeaponUpgradeIndexMapEntry {
 ///
 pub struct CSWepReinforceTree {
     vftable: usize,
-    pub allocator: DLAllocatorRef,
+    pub allocator: &'static DLAllocator,
     /// Array of map entries, one for each weapon param row.
     /// The index corresponds to the weapon param row index.
     pub index_map: ArrayWithHeader<WeaponUpgradeIndexMapEntry>,
@@ -73,12 +73,6 @@ impl CSWepReinforceTree {
 }
 
 #[repr(C)]
-pub struct MatchAreaLimit {
-    pub area_id: u32,
-    pub multi_play_start_limit_event_flag_id: u32,
-}
-
-#[repr(C)]
 pub struct BuddyStoneTalkChrEntityId {
     /// Chr entity ID of specific buddy stone.
     pub talk_chr_entity_id: u32,
@@ -92,15 +86,9 @@ pub struct BonfireEntityId {
     pub bonfire_warp_param_index: u32,
 }
 
-#[repr(C)]
-pub struct AssetReplacementParamMapEntry {
-    pub block_id: BlockId,
-    pub param_row_index: u32,
-}
-
 bitfield! {
     #[repr(C)]
-    #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+    #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
     pub struct ChrEquipModelKey(u32);
     impl Debug;
 
@@ -174,9 +162,9 @@ impl ParamResCap {
 
         let struct_name = self.param_res_cap.data.struct_name();
         debug_assert!(
-            struct_name == P::UnderlyingType::NAME,
+            struct_name == P::StructType::NAME,
             "Expected param struct {}, was {}",
-            P::UnderlyingType::NAME,
+            P::StructType::NAME,
             struct_name,
         );
     }
@@ -202,16 +190,23 @@ pub struct SoloParamHolder {
 }
 
 impl SoloParamHolder {
+    /// The res cap at `index` in this holder, if it exists.
     pub fn get_res_cap(&self, index: usize) -> Option<&ParamResCap> {
         self.res_caps.get(index)?.as_deref()
     }
+
+    /// The mutable res cap at `index` in this holder, if it exists.
     pub fn get_res_cap_mut(&mut self, index: usize) -> Option<&mut ParamResCap> {
         self.res_caps.get_mut(index)?.as_deref_mut()
     }
-    pub fn get_res_caps(&self) -> impl Iterator<Item = &ParamResCap> {
+
+    /// An iterator over all res caps in this holder.
+    pub fn res_caps(&self) -> impl Iterator<Item = &ParamResCap> {
         self.res_caps.iter().filter_map(|opt| opt.as_deref())
     }
-    pub fn get_res_caps_mut(&mut self) -> impl Iterator<Item = &mut ParamResCap> {
+
+    /// An iterator over all mutable res caps in this holder.
+    pub fn res_caps_mut(&mut self) -> impl Iterator<Item = &mut ParamResCap> {
         self.res_caps
             .iter_mut()
             .filter_map(|opt| opt.as_deref_mut())
@@ -220,6 +215,7 @@ impl SoloParamHolder {
 
 #[repr(C)]
 #[shared::singleton("SoloParamRepository")]
+#[derive(Subclass)]
 pub struct SoloParamRepository {
     pub res_rep: FD4ResRep,
     unk78: u32,
@@ -232,23 +228,39 @@ pub struct SoloParamRepository {
     /// Ordered list of buddy stone entity IDs and their associated buddy stone param indices.
     ///
     /// Can be used to search [crate::param::BUDDY_STONE_PARAM_ST] rows based on chr entity ID.
-    pub buddy_stone_entity_ids: Vector<BuddyStoneTalkChrEntityId>,
+    pub buddy_stone_entity_ids: DLVector<BuddyStoneTalkChrEntityId>,
     /// Ordered list of bonfire entity IDs and their associated bonfire warp param indices.
     ///
     /// Can be used to search [crate::param::BONFIRE_WARP_PARAM_ST] rows based on bonfire entity ID.
-    pub bonfire_warps: Vector<BonfireEntityId>,
-    /// Tree groupping [WEATHER_ASSET_REPLACE_PARAM_ST] param rows by [BlockId].
-    pub weather_asset_replaces: Tree<AssetReplacementParamMapEntry>,
-    /// Tree groupping [LEGACY_DISTANT_VIEW_PARTS_REPLACE_PARAM] param rows by [BlockId].
-    pub legacy_distant_view_parts_replaces: Tree<AssetReplacementParamMapEntry>,
+    pub bonfire_warps: DLVector<BonfireEntityId>,
+    /// MultiMap groupping [WEATHER_ASSET_REPLACE_PARAM_ST] param row index by [BlockId].
+    pub weather_asset_replaces: DLMultiMap<BlockId, u32>,
+    /// MultiMap groupping [LEGACY_DISTANT_VIEW_PARTS_REPLACE_PARAM] param row index by [BlockId].
+    pub legacy_distant_view_parts_replaces: DLMultiMap<BlockId, u32>,
     /// Tree mapping for the [CHR_EQUIP_MODEL_PARAM_ST] param rows.
     /// The usage of this param is unknown.
-    pub chr_equip_models: Tree<ChrEquipModelMapEntry>,
+    pub chr_equip_models: DLMap<ChrEquipModelKey, u32>,
     /// Map of all area IDs to their multiplay event flag limits.
-    pub match_area_limits: Tree<MatchAreaLimit>,
+    pub match_area_limits: DLMap<u32, u32>,
 }
 
 impl SoloParamRepository {
+    /// An iterator over all solo parameters.
+    pub fn params(&self) -> impl Iterator<Item = &FD4ParamResCap> {
+        self.solo_param_holders
+            .iter()
+            .flat_map(|h| h.res_caps())
+            .map(|rc| rc.param_res_cap.as_ref())
+    }
+
+    /// An iterator over all mutable solo parameters.
+    pub fn params_mut(&mut self) -> impl Iterator<Item = &mut FD4ParamResCap> {
+        self.solo_param_holders
+            .iter_mut()
+            .flat_map(|h| h.res_caps_mut())
+            .map(|rc| rc.param_res_cap.as_mut())
+    }
+
     pub fn get_chr_equip_model_param_by_key(
         &self,
         equip_type: u8,
@@ -256,11 +268,8 @@ impl SoloParamRepository {
         model_id: u16,
     ) -> Option<&crate::param::CHR_EQUIP_MODEL_PARAM_ST> {
         let key = ChrEquipModelKey::from_parts(equip_type, gender, model_id);
-        let entry = self
-            .chr_equip_models
-            .filtered_iter(|e| e.key.0.cmp(&key.0))
-            .next()?;
-        self.get_row_by_index::<ChrEquipModelParam>(entry.param_row_index as usize)
+        let entry = self.chr_equip_models.find(&key)?;
+        self.get_row_by_index::<ChrEquipModelParam>(*entry as usize)
     }
 
     pub fn get_by_buddy_stone_param_by_entity_id(
@@ -269,10 +278,9 @@ impl SoloParamRepository {
     ) -> Option<&crate::param::BUDDY_STONE_PARAM_ST> {
         let entry_index = self
             .buddy_stone_entity_ids
-            .items()
             .binary_search_by_key(&talk_chr_entity_id, |e| e.talk_chr_entity_id)
             .ok()?;
-        let entry = &self.buddy_stone_entity_ids.items()[entry_index];
+        let entry = &self.buddy_stone_entity_ids[entry_index];
         self.get_row_by_index::<BuddyStoneParam>(entry.buddy_stone_param_index as usize)
     }
 
@@ -282,40 +290,50 @@ impl SoloParamRepository {
     ) -> Option<&crate::param::BONFIRE_WARP_PARAM_ST> {
         let entry_index = self
             .bonfire_warps
-            .items()
             .binary_search_by_key(&bonfire_entity_id, |e| e.bonfire_entity_id)
             .ok()?;
-        let entry = &self.bonfire_warps.items()[entry_index];
+        let entry = &self.bonfire_warps[entry_index];
         self.get_row_by_index::<BonfireWarpParam>(entry.bonfire_warp_param_index as usize)
     }
 
-    pub fn weather_asset_replace_params_by_block_id(
+    pub fn weather_asset_replaces_params_by_block_id(
         &self,
-        block_id: BlockId,
+        block_id: &BlockId,
     ) -> impl Iterator<Item = &crate::param::WEATHER_ASSET_REPLACE_PARAM_ST> {
         self.weather_asset_replaces
-            .filtered_iter(move |e| e.block_id.0.cmp(&block_id.0))
+            .find(block_id)
+            .filter_map(|e| self.get_row_by_index::<WeatherAssetReplaceParam>(*e as usize))
+    }
+
+    pub fn legacy_distant_view_parts_replaces_by_block_id(
+        &self,
+        block_id: &BlockId,
+    ) -> impl Iterator<Item = &crate::param::LEGACY_DISTANT_VIEW_PARTS_REPLACE_PARAM> {
+        self.legacy_distant_view_parts_replaces
+            .find(block_id)
             .filter_map(|e| {
-                self.get_row_by_index::<WeatherAssetReplaceParam>(e.param_row_index as usize)
+                self.get_row_by_index::<LegacyDistantViewPartsReplaceParam>(*e as usize)
             })
     }
 
     /// Get a solo param (regulation.bin) row by its parameter type and ID.
-    pub fn get<P: SoloParam>(&self, param_id: u32) -> Option<&P::UnderlyingType> {
-        // SAFETY: `get_param_file` checks that the param type is what we expect.
+    pub fn get<P: SoloParam>(&self, param_id: u32) -> Option<&P::StructType> {
+        // SAFETY: By construction, [SoloParam] only applies to parameters whose
+        // indices are guaranteed by the game to be consistent.
         unsafe {
             self.get_param_file::<P>()
-                .get_row_by_id::<P::UnderlyingType>(param_id)
+                .get_row_by_id::<P::StructType>(param_id)
         }
     }
 
     /// Get a mutable solo param (regulation.bin) row by its parameter type and
     /// ID.
-    pub fn get_mut<P: SoloParam>(&mut self, param_id: u32) -> Option<&mut P::UnderlyingType> {
-        // SAFETY: `get_param_file` checks that the param type is what we expect.
+    pub fn get_mut<P: SoloParam>(&mut self, param_id: u32) -> Option<&mut P::StructType> {
+        // SAFETY: By construction, [SoloParam] only applies to parameters whose
+        // indices are guaranteed by the game to be consistent.
         unsafe {
             self.get_param_file_mut::<P>()
-                .get_row_by_id_mut::<P::UnderlyingType>(param_id)
+                .get_row_by_id_mut::<P::StructType>(param_id)
         }
     }
 
@@ -326,12 +344,12 @@ impl SoloParamRepository {
     /// this when you already know the index from a mapping like
     /// [SoloParamRepository::wep_reinforces] or
     /// [SoloParamRepository::buddy_stone_entity_ids].
-    pub fn get_row_by_index<P: SoloParam>(&self, row_index: usize) -> Option<&P::UnderlyingType> {
-        // SAFETY: `get_param_file` checks that the param type is what we expect.
+    pub fn get_row_by_index<P: SoloParam>(&self, row_index: usize) -> Option<&P::StructType> {
+        // SAFETY: By construction, [SoloParam] only applies to parameters whose
+        // indices are guaranteed by the game to be consistent.
         unsafe {
             self.get_param_file::<P>()
-                .get_row_by_index::<P::UnderlyingType>(row_index)
-                .map(|pair| pair.1)
+                .get_row_by_index::<P::StructType>(row_index)
         }
     }
 
@@ -345,19 +363,85 @@ impl SoloParamRepository {
     pub fn get_row_by_index_mut<P: SoloParam>(
         &mut self,
         row_index: usize,
-    ) -> Option<&mut P::UnderlyingType> {
-        // SAFETY: `get_param_file` checks that the param type is what we expect.
+    ) -> Option<&mut P::StructType> {
+        // SAFETY: By construction, [SoloParam] only applies to parameters whose
+        // indices are guaranteed by the game to be consistent.
         unsafe {
             self.get_param_file_mut::<P>()
-                .get_row_by_index_mut::<P::UnderlyingType>(row_index)
-                .map(|pair| pair.1)
+                .get_row_by_index_mut::<P::StructType>(row_index)
         }
     }
 
     /// Returns the index of a solo param (regulation.bin) row by its parameter
     /// type and ID.
     pub fn get_index_by_param_id<P: SoloParam>(&self, param_id: u32) -> Option<usize> {
-        self.get_param_file::<P>().metadata().find_index(param_id)
+        self.get_param_file::<P>().find_index(param_id)
+    }
+
+    /// Returns an equipment parameter row enum for the given item ID, or `None`
+    /// if the row doesn't exit.
+    pub fn get_equip_param(&self, id: ItemId) -> Option<EquipParamStruct<'_>> {
+        use ItemCategory::*;
+        match id.category() {
+            Weapon => self
+                // Round to the nearest 100 in case the ID is for an upgraded
+                // weapon.
+                .get::<EquipParamWeapon>((id.param_id() / 100) * 100)
+                .map(|p| EquipParam::as_enum(p)),
+            Protector => self
+                .get::<EquipParamProtector>(id.param_id())
+                .map(|p| EquipParam::as_enum(p)),
+            Accessory => self
+                .get::<EquipParamAccessory>(id.param_id())
+                .map(|p| EquipParam::as_enum(p)),
+            Gem => self
+                .get::<EquipParamGem>(id.param_id())
+                .map(|p| EquipParam::as_enum(p)),
+            Goods => self
+                .get::<EquipParamGoods>(id.param_id())
+                .map(|p| EquipParam::as_enum(p)),
+        }
+    }
+
+    /// Returns a mutable equipment parameter row enum for the given item ID, or `None`
+    /// if the row doesn't exit.
+    pub fn get_equip_param_mut(&mut self, id: ItemId) -> Option<EquipParamStructMut<'_>> {
+        use ItemCategory::*;
+        match id.category() {
+            Weapon => self
+                // Round to the nearest 100 in case the ID is for an upgraded
+                // weapon.
+                .get_mut::<EquipParamWeapon>((id.param_id() / 100) * 100)
+                .map(|p| EquipParam::as_enum_mut(p)),
+            Protector => self
+                .get_mut::<EquipParamProtector>(id.param_id())
+                .map(|p| EquipParam::as_enum_mut(p)),
+            Accessory => self
+                .get_mut::<EquipParamAccessory>(id.param_id())
+                .map(|p| EquipParam::as_enum_mut(p)),
+            Gem => self
+                .get_mut::<EquipParamGem>(id.param_id())
+                .map(|p| EquipParam::as_enum_mut(p)),
+            Goods => self
+                .get_mut::<EquipParamGoods>(id.param_id())
+                .map(|p| EquipParam::as_enum_mut(p)),
+        }
+    }
+
+    /// Returns an iterator over each row in parameter `P` along with their
+    /// parameter IDs, in ID order.
+    pub fn rows<'a, P: SoloParam + 'a>(
+        &'a self,
+    ) -> impl Iterator<Item = (u32, &'a P::StructType)> + 'a {
+        unsafe { self.get_param_file::<P>().rows() }
+    }
+
+    /// Returns an iterator over each mutable row in parameter `P` along with
+    /// their parameter IDs, in ID order.
+    pub fn rows_mut<'a, P: SoloParam + 'a>(
+        &'a mut self,
+    ) -> impl Iterator<Item = (u32, &'a mut P::StructType)> + 'a {
+        unsafe { self.get_param_file_mut::<P>().rows_mut() }
     }
 
     /// Returns the [ParamFile] associated with `P`, if it exists at the
@@ -407,23 +491,37 @@ impl SoloParamRepository {
     }
 }
 
+/// A shared trait for parameters that are part of [SoloParamRepository], used
+/// to ensure that they can be accessed in a type-safe way.
 pub trait SoloParam {
+    /// The parameter name. This corresponds to `ParamResCap.res_cap.name` and
+    /// `FD4ParamResCap.res_cap.name`, not to [ParamFile::struct_name] and
+    /// [ParamDef::NAME].
     const NAME: &'static str;
+
+    /// The index of this parameter in [SoloParamRepository].
     const INDEX: u32;
-    type UnderlyingType: ParamDef;
+
+    /// The type of the data that this parameter contains.
+    type StructType: ParamDef;
 }
 
 use crate::param::*;
 
 macro_rules! solo_params {
-    ( $( ($ParamType:ident, $UnderlyingType:ty, $Index:expr) ),* $(,)? ) => {
+    ( $( ($ParamType:ident, $StructType:ty, $Index:expr) ),* $(,)? ) => {
         $(
+            #[doc="The"]
+            #[doc=stringify!($ParamType)]
+            #[doc="parameter. This can be used with [SoloParamRepository::get] and similar methods"]
+            #[doc="to load parameter data."]
             #[allow(non_camel_case_types)]
             pub struct $ParamType;
+
             impl SoloParam for $ParamType {
                 const NAME: &'static str = stringify!($ParamType);
                 const INDEX: u32 = $Index;
-                type UnderlyingType = $UnderlyingType;
+                type StructType = $StructType;
             }
         )*
     };

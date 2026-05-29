@@ -143,6 +143,18 @@ class = "CS::MsbFileCap"
 vftable = "msb_file_cap_vmt"
 
 [[vmts]]
+class = "CS::CSLuaEventMsgExec"
+vftable = "cslua_event_msg_exec_vmt"
+
+[[vmts]]
+class = "CS::CSLuaEventMsgExec_Func"
+vftable = "cslua_event_msg_exec_func_vmt"
+
+[[vmts]]
+class = "CS::CSLuaEventMsgExec_String"
+vftable = "cslua_event_msg_exec_string_vmt"
+
+[[vmts]]
 class = "CS::CSMsbParts"
 vftable = "csmsb_parts_vmt"
 
@@ -210,6 +222,10 @@ vftable = "ichr_finder_vmt"
 class = "CS::NearEnemyFinder"
 vftable = "near_enemy_finder_vmt"
 
+[[vmts]]
+class = "CS::SoloParamRepositoryImp"
+vftable = "solo_param_repository_vmt"
+
 [[patterns]]
 pattern = "48 8d 05 $ { ' } 48 89 4f 68 88 4f 70 48 89 4f 78 48 89 07 48 8b 43 18"
 captures = ["", "fd4file_cap_vmt"]
@@ -222,8 +238,9 @@ captures = ["", "fd4param_repository_vmt"]
 pattern = "48 8d 05 $ { ' } 48 89 07 48 89 77 78 48 89 b7 80 00 00 00 48 89 b7 88 00 00 00"
 captures = ["", "fd4param_res_cap_vmt"]
 
+# Not a unique pattern, but every match is a call to `FD4::FD4TaskBase::FD4TaskBase()`.
 [[patterns]]
-pattern = "e8 $ { 48 8d 05 $ { ' } } 90 48 8d 05 ? ? ? ? 48 89 06 ? ? ? ? 7b 76 02 48 89 06 48 89 5e 10 48 8b"
+pattern = "e8 $ { 48 8d 05 $ { ' } } 90 48 8d 05 ? ? ? ? 48 89 06 48 8d 05 ? ? ? ? 48 89 06 48 89 5e 10 48 8b"
 captures = ["", "fd4task_base_vmt"]
 
 [[patterns]]
@@ -330,6 +347,10 @@ pattern = "e8 $ { 48 89 4c 24 08 55 56 57 48 83 ec 30 } eb ? 33 c0 48 89 05 $ { 
 captures = ["", "world_chr_man_dbg_flags"]
 pattern = "80 3d $ { ? ' } 00 0f 85 [4] 32 c0 "
 
+[[patterns]]
+captures = ["", "runtime_heap_allocator"]
+pattern = "e8 [4] 48 8b 05 ${ ' } 48 85 c0 75 0c e8 [4] 48 89 05 [4] 48 89 05 [4]"
+
 [[vmts]]
 class = "CS::CSEzStateTalkEvent"
 vftable = "cs_ez_state_talk_event_vmt"
@@ -345,3 +366,7 @@ vftable = "ez_state_detail_external_event_temp_vmt"
 [[vmts]]
 class = "EzState::EzStateEnvironmentQueryImpl"
 vftable = "ez_state_environment_query_impl_vmt"
+
+[[vmts]]
+class = "EzState::EzStateValue::EzStateSharedString"
+vftable = "ez_state_shared_string_vmt"

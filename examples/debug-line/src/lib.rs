@@ -4,9 +4,8 @@ use eldenring::{
     cs::{CSTaskGroupIndex, CSTaskImp, RendMan, WorldChrMan},
     fd4::FD4TaskData,
     position::PositionDelta,
-    util::system::wait_for_system_init,
 };
-use fromsoftware_shared::{F32Vector4, FromStatic, program::Program, task::*};
+use fromsoftware_shared::{F32Vector4, FromStatic, SharedTaskImpExt};
 
 #[unsafe(no_mangle)]
 /// # Safety
@@ -21,13 +20,9 @@ pub unsafe extern "C" fn DllMain(_hmodule: usize, reason: u32) -> bool {
 
     // Kick off new thread.
     std::thread::spawn(|| {
-        // Wait for game (current program we're injected into) to boot up.
-        // This will block until the game initializes its systems (singletons, statics, etc).
-        wait_for_system_init(&Program::current(), Duration::MAX)
-            .expect("Could not await system init.");
-
-        // Retrieve games task runner.
-        let cs_task = unsafe { CSTaskImp::instance().unwrap() };
+        // Wait for the game (current program we're injected into) to boot up
+        // and initialize its task runner.
+        let cs_task = CSTaskImp::wait_for_instance(Duration::MAX).unwrap();
 
         // Register a new task with the game to happen every frame during the gameloops
         // ChrIns_PostPhysics phase because all the physics calculations have ran at this
@@ -36,7 +31,7 @@ pub unsafe extern "C" fn DllMain(_hmodule: usize, reason: u32) -> bool {
             // The registered task will be our closure.
             |_: &FD4TaskData| {
                 // Grab the debug ez draw from RendMan if it's available. Bail otherwise.
-                let Some(ez_draw) = unsafe { RendMan::instance() }
+                let Some(ez_draw) = unsafe { RendMan::instance_mut() }
                     .ok()
                     .map(|r| r.debug_ez_draw.as_mut())
                 else {
@@ -52,7 +47,7 @@ pub unsafe extern "C" fn DllMain(_hmodule: usize, reason: u32) -> bool {
                 };
 
                 // Grab physics module from player.
-                let physics = &player.chr_ins.module_container.physics;
+                let physics = &player.chr_ins.modules.physics;
 
                 // Make a directional vector that points forward following the players
                 // rotation.

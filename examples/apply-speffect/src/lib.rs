@@ -3,9 +3,9 @@ use std::time::Duration;
 use eldenring::{
     cs::{CSTaskGroupIndex, CSTaskImp, ChrInsExt, WorldChrMan},
     fd4::FD4TaskData,
-    util::{input, system::wait_for_system_init},
+    util::input,
 };
-use fromsoftware_shared::{FromStatic, program::Program, task::*};
+use fromsoftware_shared::{FromStatic, SharedTaskImpExt};
 
 const SP_EFFECT: i32 = 4330;
 
@@ -19,15 +19,12 @@ pub unsafe extern "C" fn DllMain(_hmodule: u64, reason: u32) -> bool {
     }
 
     std::thread::spawn(move || {
-        wait_for_system_init(&Program::current(), Duration::MAX)
-            .expect("Timeout waiting for system init");
-
         // Retrieve games task runner and register a task at frame begin.
-        let cs_task = unsafe { CSTaskImp::instance().unwrap() };
+        let cs_task = CSTaskImp::wait_for_instance(Duration::MAX).unwrap();
         cs_task.run_recurring(
             |_: &FD4TaskData| {
                 // Retrieve WorldChrMan
-                let Ok(world_chr_man) = (unsafe { WorldChrMan::instance() }) else {
+                let Ok(world_chr_man) = (unsafe { WorldChrMan::instance_mut() }) else {
                     return;
                 };
 

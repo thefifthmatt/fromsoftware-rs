@@ -5,8 +5,9 @@ use bitfield::bitfield;
 use thiserror::Error;
 
 use crate::{
-    BasicVector, Vector,
+    DLVector,
     cs::{ChrType, MultiplayRole},
+    from_net::FNVector,
 };
 use shared::{IsEmpty, MaybeEmpty, NonEmptyIteratorExt, NonEmptyIteratorMutExt, OwnedPtr};
 
@@ -153,7 +154,7 @@ pub struct PlayerGameData {
     _pad931: [u8; 3],
     unk934: u32,
     /// Vector of all visited play area IDs
-    pub visited_areas: BasicVector<u32>,
+    pub visited_areas: FNVector<u32>,
     pub mount_handle: FieldInsHandle,
     unk958: [u8; 0x8],
     pub damage_negation_physical: i32,
@@ -207,7 +208,7 @@ pub struct PlayerGameData {
     unkaae: u8,
     /// Should sign cooldown be enabled?
     /// Each time your coop player dies and you have someone in your world
-    /// you will get a cooldown depending on [crate::param::WHITE_SIGN_COOL_TIME_PARAM_ST] and level from [crate::cs::CSSosSignMan::white_sign_cool_time_param_id]
+    /// you will get a cooldown depending on [crate::param::WHITE_SIGN_COOL_TIME_PARAM_ST] and level from [crate::cs::SosSignMan::white_sign_cool_time_param_id]
     pub sign_cooldown_enabled: bool,
     unkab0: [u8; 0x2],
     pub has_preorder_gesture: bool,
@@ -360,7 +361,7 @@ pub struct EquipGameData {
     equip_gesture_data: usize,
     /// Tracker for the item replenishing from the chest
     pub item_replenish_state_tracker: Option<OwnedPtr<ItemReplenishStateTracker>>,
-    pub qm_item_backup_vector: OwnedPtr<Vector<QMItemBackupVectorItem>>,
+    pub qm_item_backup_vector: OwnedPtr<DLVector<QMItemBackupVectorItem>>,
     pub equipment_entries: ChrAsmEquipEntries,
     pub player_game_data: NonNull<PlayerGameData>,
     /// Whether this equipment data belongs to the main (local) player.

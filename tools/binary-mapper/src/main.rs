@@ -48,11 +48,11 @@ struct MapArgs {
 /// Shortcut to map all files for Elden Ring.
 #[derive(Args)]
 struct EldenRingArgs {
-    /// The worldwide EXE for patch 2.6.1.
+    /// The worldwide EXE for patch 2.6.2.
     #[arg(long, env("MAPPER_ER_WW_EXE"))]
     ww_exe: PathBuf,
 
-    /// The Japanese EXE for patch 2.6.1.1.
+    /// The Japanese EXE for patch 2.6.2.1.
     #[arg(long, env("MAPPER_ER_JP_EXE"))]
     jp_exe: PathBuf,
 
@@ -64,9 +64,13 @@ struct EldenRingArgs {
 /// Shortcut to map all files for DarkSouls III.
 #[derive(Args)]
 struct DarkSoulsIIIArgs {
-    /// The EXE for patch 1.15.2 (Japenese or worldwide, either workds).
-    #[arg(long, env("MAPPER_DS3_EXE"))]
-    exe: PathBuf,
+    /// The EXE for patch 1.15.2
+    #[arg(long, env("MAPPER_DS3_WW_EXE"))]
+    ww_exe: PathBuf,
+
+    /// The Japanese EXE for patch 1.15.2.
+    #[arg(long, env("MAPPER_DS3_JP_EXE"))]
+    jp_exe: PathBuf,
 
     /// Root for the project folder.
     #[arg(long, env("MAPPER_DS3_PROJECT_ROOT"))]
@@ -145,8 +149,13 @@ fn main() {
             )
             .unwrap();
             fs::write(
-                ds3.join("src/rva/rva_data.rs"),
-                generate_rust_instance(&map_results(&profile, &args.exe)),
+                ds3.join("src/rva/rva_ww.rs"),
+                generate_rust_instance(&map_results(&profile, &args.ww_exe)),
+            )
+            .unwrap();
+            fs::write(
+                ds3.join("src/rva/rva_jp.rs"),
+                generate_rust_instance(&map_results(&profile, &args.jp_exe)),
             )
             .unwrap();
             cargo_fmt(&ds3);

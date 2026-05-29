@@ -6,9 +6,9 @@ use eldenring::{
         WorldChrMan,
     },
     fd4::FD4TaskData,
-    util::{input, system::wait_for_system_init},
+    util::input,
 };
-use fromsoftware_shared::{FromStatic, program::Program, task::*};
+use fromsoftware_shared::{FromStatic, SharedTaskImpExt};
 
 #[unsafe(no_mangle)]
 /// # Safety
@@ -21,10 +21,7 @@ pub unsafe extern "C" fn DllMain(_hmodule: usize, reason: u32) -> bool {
 
     // Kick off new thread.
     std::thread::spawn(|| {
-        wait_for_system_init(&Program::current(), Duration::MAX)
-            .expect("Could not await system init.");
-
-        let cs_task = unsafe { CSTaskImp::instance().unwrap() };
+        let cs_task = CSTaskImp::wait_for_instance(Duration::MAX).unwrap();
         cs_task.run_recurring(
             |_: &FD4TaskData| {
                 if !input::is_key_pressed(0x48) {
@@ -38,7 +35,7 @@ pub unsafe extern "C" fn DllMain(_hmodule: usize, reason: u32) -> bool {
                     return;
                 };
 
-                let Some(block_geom_data) = unsafe { CSWorldGeomMan::instance() }
+                let Some(block_geom_data) = unsafe { CSWorldGeomMan::instance_mut() }
                     .ok()
                     .and_then(|wgm| wgm.geom_block_data_by_id_mut(&player.chr_ins.block_id()))
                 else {

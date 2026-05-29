@@ -1,14 +1,16 @@
+use hudhook::windows::Win32::{Foundation::HINSTANCE, System::SystemServices::DLL_PROCESS_ATTACH};
 use hudhook::{Hooks, Hudhook, ImguiRenderLoop, eject};
 use tracing_panic::panic_hook;
-use windows::Win32::{Foundation::HINSTANCE, System::SystemServices::DLL_PROCESS_ATTACH};
 
 mod clipboard;
 mod display;
 mod ext;
+mod input;
 mod state_map;
 
 pub use clipboard::*;
 pub use ext::*;
+pub use input::*;
 pub use state_map::*;
 
 /// Initializes the debug tool as a DLL plugin, setting up a panic handler,
@@ -43,12 +45,14 @@ where
     let appender = tracing_appender::rolling::never("./", "chains-debug.log");
     tracing_subscriber::fmt().with_writer(appender).init();
 
+    let hmodule_raw = hmodule.0 as usize;
+
     std::thread::spawn(move || {
         wait_for_system_init();
 
         if let Err(e) = Hudhook::builder()
             .with::<T>(render_loop)
-            .with_hmodule(hmodule)
+            .with_hmodule(HINSTANCE(hmodule_raw as *mut _))
             .build()
             .apply()
         {

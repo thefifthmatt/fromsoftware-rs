@@ -3,7 +3,7 @@ use std::{ptr::NonNull, slice};
 use thiserror::Error;
 
 use super::FieldArea;
-use crate::cxx_stl::CxxVec;
+use crate::stl::DLVector;
 use shared::{FromStatic, OwnedPtr, UnknownStruct};
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -93,6 +93,12 @@ impl TryFrom<u32> for EventFlag {
     }
 }
 
+impl From<EventFlag> for u32 {
+    fn from(value: EventFlag) -> u32 {
+        value.0
+    }
+}
+
 #[repr(C)]
 // Source of name: FD4Singleton error handling
 /// The singleton that manages the game's event flags.
@@ -113,8 +119,8 @@ impl SprjEventFlagMan {
         let word_index = flag.word() as usize;
         self.get_event_zone_mut(flag)
             .and_then(|z| {
-                let old_word = z.words().get(word_index)?;
-                z.words_mut()[word_index] = if state {
+                let old_word = z.words.get(word_index)?;
+                z.words[word_index] = if state {
                     old_word | (1 << flag.bit())
                 } else {
                     old_word & !(1 << flag.bit())
@@ -128,7 +134,7 @@ impl SprjEventFlagMan {
     /// that don't exist.
     pub fn get_flag(&self, flag: EventFlag) -> bool {
         self.get_event_zone(flag)
-            .and_then(|z| z.words().get(flag.word() as usize))
+            .and_then(|z| z.words.get(flag.word() as usize))
             .map(|word| (word >> flag.bit()) & 1 == 1)
             .unwrap_or_default()
     }
@@ -162,26 +168,22 @@ impl SprjEventFlagMan {
 
     /// Returns the index of the [EventBlock] that contains `flag`.
     pub fn get_event_block_index(&self, flag: EventFlag) -> Option<u32> {
-        if flag.area() == 0 && flag.group() == 0 {
-            Some(0)
+        Some(if flag.area() == 0 && flag.group() == 0 {
+            0
             // Safety: If the event man is being accessed safely, the field area
             // should be accessible as well.
         } else if let Ok(field_area) = unsafe { FieldArea::instance() } {
-            field_area
-                .world_res()?
-                .super_world_info
-                .area_info()
-                .iter()
-                .find(|ai| ai.area_number == flag.area())
-                .and_then(|ai| {
-                    ai.block_info().iter().find(|bi| {
-                        bi.block_id.group() == flag.group() && bi.block_id.area() == flag.area()
-                    })
-                })
-                .map(|bi| bi.world_block_index + 1)
+            let (_, block_infos) = field_area
+                .world_info_owner
+                .area_and_block_info()
+                .find(|(area_infos, _)| area_infos.area_number == flag.area())?;
+            let block_info = block_infos.iter().find(|bi| {
+                bi.block_id.group() == flag.group() && bi.block_id.area() == flag.area()
+            })?;
+            block_info.world_block_index + 1
         } else {
-            Some((flag.global_block_index()? + 1).into())
-        }
+            (flag.global_block_index()? + 1).into()
+        })
     }
 }
 
@@ -192,14 +194,22 @@ pub struct FD4VirtualMemoryFlag {
     /// Raw backing data for event flags. This is not guaranteed to be organized
     /// in any particular way; access events through the dedicated methods
     /// instead of directly through this buffer.
-    pub data: [OwnedPtr<u32>; 2],
+    ///
+    /// In a literal sense, this struct owns these pointers. However, to ensure
+    /// Rust's aliasing rules aren't violated, we only expose safe references to
+    /// them through [EventZone].
+    pub data: [NonNull<u32>; 2],
 
     /// The length in bytes of the corresponding buffers in [data](Self.data).
     pub data_length: [usize; 2],
 
     /// The array of event blocks. The length is stored as a u64 immediately
     /// before the head of the array.
-    pub blocks: OwnedPtr<EventBlock>,
+    ///
+    /// In a literal sense, this struct owns these pointers. However, to ensure
+    /// Rust's aliasing rules aren't violated, we only expose safe references to
+    /// them through [EventRegion].
+    pub blocks: NonNull<EventBlock>,
 
     /// The event worlds. Only one is active at a time.
     pub worlds: [EventWorld; 2],
@@ -210,7 +220,7 @@ pub struct FD4VirtualMemoryFlag {
     /// The index of [self.current_world] in [self.worlds].
     pub current_world_index: u32,
 
-    pub _unk224: u32,
+    _unk224: u32,
 
     /// Whether this class's data has been initialized.
     pub is_initialized: bool,
@@ -231,7 +241,7 @@ impl FD4VirtualMemoryFlag {
 #[repr(C)]
 // Source of name: RTTI
 pub struct EventMakerEx {
-    _unk00: CxxVec<UnknownStruct<0x30>>,
+    _unk00: DLVector<UnknownStruct<0x30>>,
     _unk20: u64, // debug related?
 }
 
@@ -247,7 +257,7 @@ pub struct EventWorld {
 #[repr(C)]
 pub struct EventRegion {
     /// A pointer to the list of event blocks that are part of this region.
-    pub blocks: Option<NonNull<EventBlock>>,
+    pub blocks: Option<OwnedPtr<EventBlock>>,
 
     /// The length of the [blocks](Self.blocks) array.
     pub blocks_length: u32,
@@ -259,6 +269,7 @@ impl EventRegion {
     /// Returns the list of blocks that belong to this region.
     pub fn blocks(&self) -> &[EventBlock] {
         self.blocks
+            .as_ref()
             .map(|blocks| unsafe {
                 slice::from_raw_parts(blocks.as_ptr(), self.blocks_length as usize)
             })
@@ -268,7 +279,8 @@ impl EventRegion {
     /// Returns the mutable list of blocks that belong to this region.
     pub fn blocks_mut(&mut self) -> &mut [EventBlock] {
         self.blocks
-            .map(|mut blocks| unsafe {
+            .as_mut()
+            .map(|blocks| unsafe {
                 slice::from_raw_parts_mut(blocks.as_mut(), self.blocks_length as usize)
             })
             .unwrap_or_default()
@@ -283,20 +295,8 @@ pub struct EventBlock {
 
 #[repr(C)]
 pub struct EventZone {
-    pub words: NonNull<[u32; 32]>,
+    pub words: OwnedPtr<[u32; 32]>,
     _unka0: u64,
-}
-
-impl EventZone {
-    /// The words in this zone.
-    pub fn words(&self) -> &[u32] {
-        unsafe { self.words.as_ref() }
-    }
-
-    /// The mutable words in this zone.
-    pub fn words_mut(&mut self) -> &mut [u32] {
-        unsafe { self.words.as_mut() }
-    }
 }
 
 #[cfg(test)]

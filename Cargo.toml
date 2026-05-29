@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/shared",
+    "crates/shared/stl",
     "crates/darksouls3",
     "crates/eldenring",
     "crates/nightreign",
@@ -17,23 +18,40 @@ members = [
     "examples/invoke-esd",
     "examples/spawn-asset",
     "examples/present-action-button",
+    "tests",
+]
+default-members = [
+    "crates/shared",
+    "crates/shared/stl",
+    "crates/darksouls3",
+    "crates/eldenring",
+    "crates/nightreign",
+    "crates/sekiro",
+    "examples/apply-speffect",
+    "examples/debug-line",
+    "examples/invoke-esd",
+    "examples/spawn-asset",
+    "examples/present-action-button",
+    "tests",
 ]
 
 [workspace.package]
-version = "0.12.0"
+version = "0.13.0"
 edition = "2024"
 repository = "https://github.com/vswarte/eldenring-rs"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-fromsoftware-shared = { path = "crates/shared", version = "0.12.0", package = "fromsoftware-shared" }
-fromsoftware-shared-macros = { path = "crates/shared/macros", version = "0.12.0", package = "fromsoftware-shared-macros" }
-eldenring = { path = "crates/eldenring", version = "0.12.0", package = "eldenring" }
-darksouls3 = { path = "crates/darksouls3", version = "0.12.0", package = "darksouls3" }
-nightreign = { path = "crates/nightreign", version = "0.12.0", package = "nightreign" }
-sekiro = { path = "crates/sekiro", version = "0.12.0", package = "sekiro" }
-debug = { path = "crates/debug", version = "0.12.0", package = "debug" }
+fromsoftware-shared = { path = "crates/shared", version = "0.13.0", package = "fromsoftware-shared" }
+fromsoftware-shared-macros = { path = "crates/shared/macros", version = "0.13.0", package = "fromsoftware-shared-macros" }
+fromsoftware-shared-stl = { path = "crates/shared/stl", version = "0.13.0", package = "fromsoftware-shared-stl" }
+eldenring = { path = "crates/eldenring", version = "0.13.0", package = "eldenring" }
+darksouls3 = { path = "crates/darksouls3", version = "0.13.0", package = "darksouls3" }
+nightreign = { path = "crates/nightreign", version = "0.13.0", package = "nightreign" }
+sekiro = { path = "crates/sekiro", version = "0.13.0", package = "sekiro" }
+debug = { path = "crates/debug", version = "0.13.0", package = "debug" }
 binary_mapper = { path = "crates/binary-mapper" }
+bitflags = "2.11.0"
 thiserror = "1"
 tracing = "0.1"
 tracing-subscriber = "0.3"
@@ -42,22 +60,26 @@ tracing-panic = "0.1"
 glam = ">= 0.30"
 byteorder = "1"
 pelite = "0.10"
-vtable-rs = "0.1.4"
+vtable-rs = "0.1.5"
 bitfield = "0.19.2"
 encoding_rs = "0.8.35"
 libhotpatch = "1.1.0"
-cxx-stl = "4.4"
+toml = "1.0.3"
+num_enum = "0.7"
+
+[workspace.dependencies.serde]
+version = "1"
+features = ["derive"]
 
 [workspace.dependencies.windows]
-version = "0.54"
+version = "0.61"
 features = [
     "Win32_Foundation",
-	"Win32_System_Kernel",
-	"Win32_System_Threading",
-	"Win32_UI_WindowsAndMessaging",
-	"Win32_UI_Input_KeyboardAndMouse",
-	"Win32_System_Diagnostics_Debug",
-	"Win32_System_LibraryLoader",
+    "Win32_System_Kernel",
+    "Win32_System_Threading",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_LibraryLoader",
     "Win32_System_Memory",
 ]
 
@@ -71,3 +93,10 @@ lto = true
 codegen-units = 1
 panic = "abort"
 opt-level = "z"
+
+[profile.ci]
+inherits = "dev"
+debug = false
+
+[profile.ci.package."*"]
+debug = false

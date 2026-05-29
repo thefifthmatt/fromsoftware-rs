@@ -1,16 +1,16 @@
 use std::{borrow::Cow, ptr::NonNull};
 
-use super::WorldRes;
+use super::WorldInfoOwner;
 use crate::rva;
-use shared::{FromStatic, InstanceResult};
+use shared::*;
 
 #[repr(C)]
 pub struct FieldArea {
     _vftable: usize,
 
-    pub world_res: Option<NonNull<WorldRes>>,
+    pub world_info_owner: OwnedPtr<WorldInfoOwner>,
 
-    _world_res_2: Option<NonNull<WorldRes>>, // Always the same as [world_res], apparently
+    _world_info_owner_2: NonNull<WorldInfoOwner>, // Always the same as [world_info_owner], apparently
 
     _game_rend: u64,
     _unk20: u32,
@@ -25,18 +25,12 @@ pub struct FieldArea {
     _unke8: [u8; 8],
 }
 
-impl FieldArea {
-    pub fn world_res(&self) -> Option<&WorldRes> {
-        self.world_res.map(|ptr| unsafe { ptr.as_ref() })
-    }
-}
-
 impl FromStatic for FieldArea {
     fn name() -> Cow<'static, str> {
         "FieldArea".into()
     }
 
-    unsafe fn instance() -> InstanceResult<&'static mut Self> {
+    fn instance_ptr() -> InstanceResult<*mut Self> {
         unsafe { shared::load_static_indirect(rva::get().field_area_ptr) }
     }
 }

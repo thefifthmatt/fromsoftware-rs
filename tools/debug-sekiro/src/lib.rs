@@ -6,7 +6,7 @@ use hudhook::hooks::dx11::ImguiDx11Hooks;
 use hudhook::imgui::{sys as imgui_sys, *};
 use hudhook::windows::Win32::Foundation::HINSTANCE;
 use hudhook::{ImguiRenderLoop, eject};
-use sekiro::{sprj::*, util::system::wait_for_system_init};
+use sekiro::{app_menu::*, sprj::*, util::system::wait_for_system_init};
 
 mod display;
 
@@ -37,6 +37,13 @@ struct SekiroDebugGui {
 
     // Game Data
     game_data: StaticDebugger<GameDataMan>,
+
+    // Menu
+    menu_man: StaticDebugger<MenuMan>,
+    new_menu_system: StaticDebugger<NewMenuSystem>,
+
+    // Resources
+    solo_param_repository: StaticDebugger<SoloParamRepository>,
 }
 
 impl SekiroDebugGui {
@@ -67,6 +74,8 @@ impl ImguiRenderLoop for SekiroDebugGui {
         unsafe {
             let ctx = imgui_sys::igGetCurrentContext();
             forward_imgui_context_on_reload(ctx);
+            let blocker = InputBlocker::get_instance();
+            forward_input_blocker_on_reload(blocker)
         }
 
         // SAFETY: *do not* modify this function signature while the game is running.
@@ -78,6 +87,10 @@ impl ImguiRenderLoop for SekiroDebugGui {
 
 #[libhotpatch::hotpatch]
 unsafe fn render_live_reload(gui: &mut SekiroDebugGui, ui: &mut Ui) {
+    let io = ui.io();
+    let blocker = InputBlocker::get_instance();
+    blocker.block_from_io(io);
+
     ui.window("Sekiro Rust Bindings Debug")
         .position([30., 30.], Condition::FirstUseEver)
         .size(gui.size, Condition::FirstUseEver)
@@ -95,6 +108,17 @@ unsafe fn render_live_reload(gui: &mut SekiroDebugGui, ui: &mut Ui) {
                 item.end();
             }
 
+            if let Some(item) = ui.tab_item("Menu") {
+                gui.menu_man.render_debug(ui);
+                gui.new_menu_system.render_debug(ui);
+                item.end();
+            }
+
+            if let Some(item) = ui.tab_item("Resources") {
+                gui.solo_param_repository.render_debug(ui);
+                item.end();
+            }
+
             if let Some(item) = ui.tab_item("Eject") {
                 if ui.button("Eject") {
                     eject();
@@ -109,4 +133,12 @@ unsafe fn render_live_reload(gui: &mut SekiroDebugGui, ui: &mut Ui) {
 unsafe fn forward_imgui_context_on_reload(ctx: *mut imgui_sys::ImGuiContext) {
     static ONCE: Once = Once::new();
     ONCE.call_once(|| unsafe { imgui_sys::igSetCurrentContext(ctx) });
+}
+
+#[libhotpatch::hotpatch]
+unsafe fn forward_input_blocker_on_reload(blocker: &'static InputBlocker) {
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| {
+        InputBlocker::forward_instance(blocker);
+    });
 }

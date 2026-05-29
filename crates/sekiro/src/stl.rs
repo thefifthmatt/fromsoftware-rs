@@ -1,83 +1,19 @@
-use std::ptr::NonNull;
+use std::ffi::c_void;
 
-use crate::dlkr::DLAllocatorBase;
+use crate::dlkr::DLAllocator;
 
-#[repr(C)]
-pub struct BasicVector<T>
-where
-    T: Sized,
-{
-    pub begin: Option<NonNull<T>>,
-    pub end: Option<NonNull<T>>,
-    pub capacity: Option<NonNull<T>>,
-}
-
-impl<T> BasicVector<T>
-where
-    T: Sized,
-{
-    pub fn items(&self) -> &[T] {
-        let Some(start) = self.begin else {
-            return &mut [];
-        };
-
-        let end = self.end.unwrap();
-        let count = (end.as_ptr() as usize - start.as_ptr() as usize) / size_of::<T>();
-
-        unsafe { std::slice::from_raw_parts(start.as_ptr(), count) }
+impl fromsoftware_shared_stl::StlAllocator for &'static DLAllocator {
+    unsafe fn allocate_raw(&self, size: usize, align: usize) -> *mut c_void {
+        let allocation = (self.vftable.allocate_aligned)(self, size, align);
+        if allocation.is_null() {
+            panic!("DLAllocator returned null pointer")
+        }
+        allocation as _
     }
 
-    pub fn items_mut(&mut self) -> &mut [T] {
-        let Some(start) = self.begin else {
-            return &mut [];
-        };
-
-        let end = self.end.unwrap();
-        let count = (end.as_ptr() as usize - start.as_ptr() as usize) / size_of::<T>();
-
-        unsafe { std::slice::from_raw_parts_mut(start.as_ptr(), count) }
-    }
-
-    pub fn len(&self) -> usize {
-        let Some(end) = self.end else {
-            return 0;
-        };
-
-        let Some(start) = self.begin else {
-            return 0;
-        };
-
-        (end.as_ptr() as usize - start.as_ptr() as usize) / size_of::<T>()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
+    unsafe fn deallocate_raw(&self, ptr: *mut c_void) {
+        (self.vftable.deallocate)(self, ptr as _);
     }
 }
 
-#[repr(C)]
-pub struct Vector<T>
-where
-    T: Sized,
-{
-    allocator: NonNull<DLAllocatorBase>,
-    pub base: BasicVector<T>,
-}
-
-impl<T> Vector<T> {
-    pub fn items(&self) -> &[T] {
-        self.base.items()
-    }
-
-    pub fn items_mut(&mut self) -> &mut [T] {
-        self.base.items_mut()
-    }
-
-    pub fn len(&self) -> usize {
-        self.base.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.base.is_empty()
-    }
-}
+pub type DLVector<T> = fromsoftware_shared_stl::Vector<T, &'static DLAllocator>;

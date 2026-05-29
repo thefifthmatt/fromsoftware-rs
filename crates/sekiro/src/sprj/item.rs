@@ -5,7 +5,7 @@ use pelite::pe64::Pe;
 use shared::{FromStatic, IncompleteArrayField, InstanceResult, OwnedPtr, Program};
 
 use super::ItemId;
-use crate::{dlkr::DLAllocatorRef, rva, stl::Vector};
+use crate::{dlkr::DLAllocator, rva, stl::DLVector};
 
 #[repr(C)]
 // Source of name: RTTI
@@ -27,8 +27,8 @@ pub struct MapItemMan {
     _unk60: u64,
     _unk68: u64,
     _unk70: u64,
-    _unk78: Vector<u8>,
-    _unk98: Vector<u8>,
+    _unk78: DLVector<u8>,
+    _unk98: DLVector<u8>,
     pub map_item_drop_changer: OwnedPtr<CSMapItemDropChanger>,
     pub menu_handle: MenuHandle,
     _unkd8: [u8; 0x50],
@@ -36,7 +36,7 @@ pub struct MapItemMan {
     _unk130: u8,
     _unk134: u32,
     _unk138: u32,
-    _unk140: DLAllocatorRef,
+    _unk140: &'static DLAllocator,
     _unk148: u64,
     _unk150: u64,
     _unk158: u32,
@@ -57,7 +57,7 @@ impl FromStatic for MapItemMan {
     }
 
     /// Returns the singleton instance of `MapItemMan`.
-    unsafe fn instance() -> InstanceResult<&'static mut Self> {
+    fn instance_ptr() -> InstanceResult<*mut Self> {
         unsafe { shared::load_static_indirect(rva::get().map_item_man_ptr) }
     }
 }
@@ -87,19 +87,19 @@ pub static MAP_ITEM_MAN_GRANT_ITEM_VA: LazyLock<u64> = LazyLock::new(|| {
 impl MapItemMan {
     /// Grants the player the single `item`, with an on-screen pop-up indicating
     /// that they received it.
-    pub fn grant_item(&self, item: impl Into<ItemBufferEntry>) {
+    pub fn grant_item(&mut self, item: impl Into<ItemBufferEntry>) {
         let array = ItemArray::new([item.into()]);
         self.grant_items(&array);
     }
 
     /// Grants the player the given `items`, with an on-screen pop-up indicating
     /// that they received them.
-    pub fn grant_items(&self, items: impl AsRef<ItemBuffer>) {
-        let grant_items: extern "C" fn(&MapItemMan, &ItemBuffer, usize, usize, bool) =
+    pub fn grant_items(&mut self, items: impl AsRef<ItemBuffer>) {
+        let grant_items: extern "C" fn(&MapItemMan, &ItemBuffer, u64, bool, usize, bool) =
             unsafe { std::mem::transmute(*MAP_ITEM_MAN_GRANT_ITEM_VA) };
-        // We don't know what the last three arguments do, but the game sets
-        // them to zero in most calls.
-        grant_items(self, items.as_ref(), 0, 0, false);
+        // Argument three is unused. We don't know what the last three arguments
+        // do, but the game sets them to zero in most calls.
+        grant_items(self, items.as_ref(), 0, false, 0, false);
     }
 }
 
@@ -107,8 +107,8 @@ impl MapItemMan {
 // Source of name: RTTI
 pub struct CSMapItemDropChanger {
     _vftable: usize,
-    _unk08: Vector<u8>,
-    _unk28: Vector<u8>,
+    _unk08: DLVector<u8>,
+    _unk28: DLVector<u8>,
     _unk48: u8,
     _unk4c: u32,
     _unk50: u32,
@@ -244,7 +244,7 @@ pub struct ItemBufferEntry {
 
 impl ItemBufferEntry {
     /// Creates an [ItemBufferEntry] containing `quantity` copies of `item`.
-    fn new(item: ItemId, quantity: u32) -> Self {
+    pub fn new(item: ItemId, quantity: u32) -> Self {
         Self {
             id: item,
             quantity,

@@ -5,6 +5,7 @@ pub use stl::*;
 
 pub(crate) mod rva;
 
+pub mod asterids;
 pub mod cs;
 pub mod dlcr;
 pub mod dlio;
@@ -16,6 +17,7 @@ pub mod dlut;
 pub mod ez_state;
 pub mod fd4;
 pub mod ffx;
+pub mod from_net;
 pub mod gxffx;
 pub mod param;
 pub mod position;

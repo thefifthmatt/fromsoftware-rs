@@ -1,8 +1,6 @@
-use std::ptr::NonNull;
-
 use vtable_rs::VPtr;
 
-use crate::{Vector, dlkr::DLAllocatorBase};
+use crate::{DLVector, dlkr::DLAllocator};
 
 pub struct FD4SlotInsBase {
     pub vftable: VPtr<dyn FD4SlotInsBaseVmt, Self>,
@@ -24,9 +22,9 @@ pub trait FD4SlotInsBaseVmt {
 #[repr(C)]
 pub struct FD4SlotSysBase {
     pub vftable: VPtr<dyn FD4SlotInsBaseVmt, Self>,
-    pub allocator: NonNull<DLAllocatorBase>,
+    pub allocator: &'static DLAllocator,
     unk10: usize,
-    unk18_vector: Vector<()>,
+    unk18_vector: DLVector<()>,
 }
 
 #[vtable_rs::vtable]

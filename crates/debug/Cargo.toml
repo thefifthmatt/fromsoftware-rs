@@ -9,6 +9,7 @@ readme = false
 description = "Helpers for writing debug tools for From Software games"
 
 [dependencies]
+bitflags.workspace = true
 fromsoftware-shared.workspace = true
 hudhook.workspace = true
 libhotpatch.workspace = true
@@ -18,3 +19,4 @@ tracing-subscriber.workspace = true
 tracing.workspace = true
 windows.workspace = true
 clipboard-win = "5.4.1"
+ilhook = { version = "2.2.0", features = ["x64"] }

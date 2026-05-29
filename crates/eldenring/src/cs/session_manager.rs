@@ -3,10 +3,10 @@ use std::ptr::NonNull;
 use windows::Win32::Foundation::FILETIME;
 
 use crate::{
-    DoublyLinkedList, Vector,
+    DLList, DLVector,
     cs::{CSRandXorshift, MultiplayRole},
     dlcr::{AESDecrypter, AESEncrypter, DLSerialCipherKey},
-    dlkr::{DLAllocatorBase, DLPlainLightMutex},
+    dlkr::{DLAllocator, DLPlainLightMutex},
     dltx::{DLInplaceStr, DLUTF16StringKind},
     fd4::FD4Time,
 };
@@ -34,31 +34,38 @@ pub enum LobbyState {
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ProtocolState {
-    Inactive = 0x0,
-    Unk1 = 0x1,
-    AwaitingWorldData = 0x2,
-    Unk3 = 0x3,
-    Unk4 = 0x4,
-    Unk5 = 0x5,
-    InWorld = 0x6,
-    Unk7 = 0x7,
-}
-
-impl ProtocolState {
-    /// Seems to be checked for packet 39,
-    #[allow(unused)]
-    fn should_handle_some_packets(&self) -> bool {
-        match self {
-            ProtocolState::Inactive => false,
-            ProtocolState::Unk1 => false,
-            ProtocolState::AwaitingWorldData => false,
-            ProtocolState::Unk3 => false,
-            ProtocolState::Unk4 => true,
-            ProtocolState::Unk5 => true,
-            ProtocolState::InWorld => false,
-            ProtocolState::Unk7 => true,
-        }
-    }
+    /// セッションに参加してない
+    ///
+    /// Not joined in session
+    None = 0x0,
+    /// マルチプレイ開始チェック
+    ///
+    /// Check to start multiplayer
+    JoinCheck = 0x1,
+    /// 初期同期データ受信待ち
+    ///
+    /// Wait to receive initial synchronization data
+    WaitInitData = 0x2,
+    /// 召喚メッセージ
+    ///
+    /// Wait for summon message display to complete
+    WaitReloadWait = 0x3,
+    /// 再ロード開始～キャラ初期化まで待ち
+    ///
+    /// Wait from reload start to character initialization
+    WaitReload = 0x4,
+    /// キャラ初期化～再ロード完了まで待ち
+    ///
+    /// Wait from character initialization to reload completion
+    WaitReload2 = 0x5,
+    /// マルチプレイ中
+    ///
+    /// In multiplayer
+    Ingame = 0x6,
+    /// マルチ継続しつつマップ再入場中
+    ///
+    /// Re-entering map while continuing multiplayer
+    WaitReentryToMap = 0x7,
 }
 
 #[repr(C)]
@@ -84,13 +91,13 @@ pub struct CSSessionManager {
     unk30: usize,
     map_active_synchronizer: usize,
     voice_chat_manager: usize,
-    allocator: NonNull<DLAllocatorBase>,
+    allocator: &'static DLAllocator,
     unk50: NonNull<Self>,
     unk58: u32,
     unk5c: u32,
     manager_impl_steam: usize,
     unk68: bool,
-    pub players: Vector<SessionManagerPlayerEntry>,
+    pub players: DLVector<SessionManagerPlayerEntry>,
     pub host_player: MaybeEmpty<SessionManagerPlayerEntryBase>,
     unk160: usize,
     unk168: usize,
@@ -154,7 +161,7 @@ pub struct CSSessionManager {
     pub enable_p2p_queue_stats: bool,
     unk2ee: u8,
     unk2ef: u8,
-    unk2f0: DoublyLinkedList<()>,
+    unk2f0: DLList<()>,
     unk308: u16,
     unk30a: u16,
     unk30c: u32,
@@ -168,7 +175,7 @@ pub struct CSSessionManager {
     unk328: i32,
     unk32c: u32,
     /// Next fields seem to be some collection?
-    unk330: NonNull<DLAllocatorBase>,
+    unk330: &'static DLAllocator,
     unk338: Option<OwnedPtr<()>>,
     unk340: u32,
     unk344: u32,
@@ -238,7 +245,7 @@ pub struct CSStayInMultiplayAreaWarpData {
     /// Vector of remote player warp trackers.
     /// Used to check when player rendering should be disabled using bitflag on ChrIns at 0x1c5.
     /// When warp time is 0, player rendering is enabled back.
-    pub player_fade_tracker: Vector<StayInMultiplayFadeTrackerEntry>,
+    pub player_fade_tracker: DLVector<StayInMultiplayFadeTrackerEntry>,
     /// Sent by host to clients on connect in packet 90 (0x5A).
     /// Contains the ID of the play area the host was in when the client connected.
     /// If current multiplay area ID has different boss ID than this one, player will be warped to latest stored position.
@@ -267,7 +274,7 @@ pub struct CSStayInMultiplayAreaWarpData {
 
 #[repr(C)]
 pub struct CSSessionManagerP2PSendQueue {
-    pub queue: Vector<CSSessionManagerP2PSendQueueEntry>,
+    pub queue: DLVector<CSSessionManagerP2PSendQueueEntry>,
     unk20: CSSessionManager0x20,
     /// [crate::cs::GameMan::rand_xorshift]
     pub rand_xor_shift: NonNull<CSRandXorshift>,

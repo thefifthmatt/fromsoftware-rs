@@ -5,7 +5,7 @@ use std::{mem, ptr, ptr::NonNull, slice};
 
 use shared::{OwnedPtr, util::IncompleteArrayField};
 
-use crate::CxxVec;
+use crate::DLVector;
 use crate::fd4::FD4BasicHashString;
 use crate::param::{
     ATK_PARAM_ST, BEHAVIOR_PARAM_ST, EQUIP_PARAM_ACCESSORY_ST, EQUIP_PARAM_GOODS_ST,
@@ -19,7 +19,7 @@ use crate::sprj::{ItemCategory, ItemId};
 pub struct CSRegulationManager {
     _vftable: usize,
     _unk8: u64,
-    pub params: CxxVec<OwnedPtr<ParamResCap>>,
+    pub params: DLVector<OwnedPtr<ParamResCap>>,
 }
 
 impl CSRegulationManager {
@@ -215,8 +215,8 @@ impl CSRegulationManager {
             .unwrap_or_else(|| panic!("Expected param index {} to be {}", index, T::NAME))
     }
 
-    /// Returns a dynamically-dispatched equipment parameter row for the given
-    /// item ID, or `None` if the row doesn't exit.
+    /// Returns an equipment parameter row enum for the given item ID, or `None`
+    /// if the row doesn't exit.
     pub fn get_equip_param(&self, id: ItemId) -> Option<EquipParamStruct<'_>> {
         use ItemCategory::*;
         match id.category() {
@@ -241,8 +241,8 @@ impl CSRegulationManager {
         }
     }
 
-    /// Returns a dynamically-dispatched mutable equipment parameter row for the
-    /// given item ID, or `None` if the row doesn't exit.
+    /// Returns a mutable equipment parameter row enum for the given item ID, or `None`
+    /// if the row doesn't exit.
     pub fn get_equip_param_mut(&mut self, id: ItemId) -> Option<EquipParamStructMut<'_>> {
         use ItemCategory::*;
         match id.category() {

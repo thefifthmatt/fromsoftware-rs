@@ -3,7 +3,7 @@ use std::{borrow::Cow, ptr::NonNull};
 use shared::{FromStatic, Subclass, Superclass, UnknownStruct};
 
 use super::{GaitemSelectBaseMenu, GaitemSelectMenu};
-use crate::{CxxVec, dlut::DLFixedVector, rva, sprj::SprjScaleformValue};
+use crate::{DLVector, dlut::DLFixedVector, rva, sprj::SprjScaleformValue};
 
 #[repr(C)]
 // Source of name: RTTI
@@ -71,7 +71,7 @@ impl FromStatic for NewMenuSystem {
         "NewMenuSystem".into()
     }
 
-    unsafe fn instance() -> fromsoftware_shared::InstanceResult<&'static mut Self> {
+    fn instance_ptr() -> fromsoftware_shared::InstanceResult<*mut Self> {
         unsafe { shared::load_static_indirect(rva::get().app_menu_new_menu_system_ptr) }
     }
 }
@@ -92,8 +92,8 @@ pub struct MenuWindow {
     _unkd8: SceneObjProxy,
     _unk138: SceneObjProxy,
     _unk198: u64,
-    _unk1a0: CxxVec<u64>,
-    _unk1c0: CxxVec<u64>,
+    _unk1a0: DLVector<u64>,
+    _unk1c0: DLVector<u64>,
     _component_holder: usize,
     _unk1e8: [u8; 0x18],
     _unk200: SprjScaleformValue,
