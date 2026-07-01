@@ -1,6 +1,7 @@
 use hudhook::windows::Win32::{Foundation::HINSTANCE, System::SystemServices::DLL_PROCESS_ATTACH};
 use hudhook::{Hooks, Hudhook, ImguiRenderLoop, eject};
 use tracing_panic::panic_hook;
+// use std::ffi::c_void;
 
 mod clipboard;
 mod display;
@@ -52,7 +53,7 @@ where
 
         if let Err(e) = Hudhook::builder()
             .with::<T>(render_loop)
-            .with_hmodule(HINSTANCE(hmodule_raw as *mut _))
+            .with_hmodule(HINSTANCE(hmodule_raw as isize)) // *mut c_void
             .build()
             .apply()
         {

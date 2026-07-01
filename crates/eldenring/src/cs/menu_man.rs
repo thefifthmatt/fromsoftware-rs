@@ -154,7 +154,10 @@ pub struct BackScreenData {
 #[repr(C)]
 pub struct LoadingScreenData {
     vftable: usize,
-    unk8: [u8; 0x20],
+    unk8: [u8; 0x8],
+    pub is_loading: bool,
+    pub is_main_menu: bool,
+    unk14: [u8; 0x16],
 }
 
 #[repr(C)]
